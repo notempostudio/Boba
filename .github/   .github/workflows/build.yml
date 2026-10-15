@@ -1,0 +1,38 @@
+name: build
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: g++ -O2 -std=c++17 -Wall -Wextra tests/test_core.cpp -o core_tests && ./core_tests
+
+  macos:
+    needs: core-tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - run: cmake --build build --config Release --target Boba_VST3 Boba_AU -j 4
+      - name: Make DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = "tag" ] || VERSION="dev"
+          bash make_dmg.sh "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Boba-macOS-dmg
+          path: Boba-*.dmg
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Boba-*.dmg
